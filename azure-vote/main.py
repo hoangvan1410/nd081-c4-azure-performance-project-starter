@@ -91,7 +91,17 @@ else:
     title = app.config['TITLE']
 
 # Redis Connection
-r = redis.Redis()
+try:
+    if "REDIS_PWD" in os.environ:
+        r = redis.StrictRedis(host='172.19.0.3',
+                        port=6379,
+                        password=os.environ['REDIS_PWD'])
+    else:
+        r = redis.Redis('172.19.0.3')
+    r.ping()
+except redis.ConnectionError as e:
+    print(f"Redis connection error: {e}")
+    exit('Failed to connect to Redis, terminating.')
 
 # Change title to host name to demo NLB
 if app.config['SHOWHOST'] == "true":
