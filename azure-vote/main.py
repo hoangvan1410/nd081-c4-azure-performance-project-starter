@@ -8,21 +8,69 @@ import logging
 from datetime import datetime
 
 # App Insights
-# TODO: Import required libraries for App Insights
-
-# Logging
-logger = # TODO: Setup logger
+# Import required libraries for App Insights
+from opencensus.ext.azure import metrics_exporter
+from opencensus.ext.azure.log_exporter import AzureEventHandler, AzureLogHandler
+from opencensus.ext.azure.trace_exporter import AzureExporter
+from opencensus.ext.flask.flask_middleware import FlaskMiddleware
+from opencensus.stats import aggregation as aggregation_module
+from opencensus.stats import measure as measure_module
+from opencensus.stats import stats as stats_module
+from opencensus.stats import view as view_module
+from opencensus.tags import tag_map as tag_map_module
+from opencensus.trace import config_integration
+from opencensus.trace.samplers import ProbabilitySampler
+from opencensus.trace.tracer import Tracer
 
 # Metrics
-exporter = # TODO: Setup exporter
+stats = stats_module.stats
+view_manager = stats.view_manager
+
+config_integration.trace_integrations(["logging"])
+config_integration.trace_integrations(["requests"])
+
+# Logging
+logger = logging.getLogger(__name__) # Setup logger
+handler = AzureLogHandler(
+    connection_string="InstrumentationKey=42198c9f-43fe-44f6-a458-1d17a9ca83cc;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=555655ae-2e0f-44de-b5d1-2e9d65854e2e"
+)
+
+handler.setFormatter(logging.Formatter("%(traceId)s %(spanId)s %(message)s"))
+
+logger.addHandler(handler)
+logger.addHandler(
+    AzureEventHandler(
+        connection_string="InstrumentationKey=42198c9f-43fe-44f6-a458-1d17a9ca83cc;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=555655ae-2e0f-44de-b5d1-2e9d65854e2e"
+    )
+)
+
+logger.setLevel(logging.INFO)
+
+exporter = metrics_exporter.new_metrics_exporter(
+    enable_standard_metrics=True,
+    connection_string="InstrumentationKey=42198c9f-43fe-44f6-a458-1d17a9ca83cc;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=555655ae-2e0f-44de-b5d1-2e9d65854e2e",
+) # Setup exporter
+
+view_manager.register_exporter(exporter)
 
 # Tracing
-tracer = # TODO: Setup tracer
+tracer = Tracer(
+    exporter=AzureExporter(
+        connection_string="InstrumentationKey=42198c9f-43fe-44f6-a458-1d17a9ca83cc;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=555655ae-2e0f-44de-b5d1-2e9d65854e2e"
+    ),
+    sampler=ProbabilitySampler(1.0),
+) # Setup tracer
 
 app = Flask(__name__)
 
 # Requests
-middleware = # TODO: Setup flask middleware
+middleware = FlaskMiddleware(
+    app,
+    exporter=AzureExporter(
+        connection_string="InstrumentationKey=42198c9f-43fe-44f6-a458-1d17a9ca83cc;IngestionEndpoint=https://westus2-2.in.applicationinsights.azure.com/;LiveEndpoint=https://westus2.livediagnostics.monitor.azure.com/;ApplicationId=555655ae-2e0f-44de-b5d1-2e9d65854e2e"
+    ),
+    sampler=ProbabilitySampler(rate=1.0),
+) # Setup flask middleware
 
 # Load configurations from environment or config file
 app.config.from_pyfile('config_file.cfg')
@@ -50,8 +98,11 @@ if app.config['SHOWHOST'] == "true":
     title = socket.gethostname()
 
 # Init Redis
-if not r.get(button1): r.set(button1,0)
-if not r.get(button2): r.set(button2,0)
+if not r.get(button1):
+    r.set(button1,0)
+    
+if not r.get(button2):
+    r.set(button2,0)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -60,9 +111,14 @@ def index():
 
         # Get current values
         vote1 = r.get(button1).decode('utf-8')
-        # TODO: use tracer object to trace cat vote
+        # use tracer object to trace cat vote
+        with tracer.span(name="Cats Vote") as span:
+            print("Cats Vote")
+            
         vote2 = r.get(button2).decode('utf-8')
-        # TODO: use tracer object to trace dog vote
+        # use tracer object to trace dog vote
+        with tracer.span(name="Dogs Vote") as span:
+            print("Dogs Vote")
 
         # Return index with values
         return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
@@ -76,11 +132,13 @@ def index():
             r.set(button2,0)
             vote1 = r.get(button1).decode('utf-8')
             properties = {'custom_dimensions': {'Cats Vote': vote1}}
-            # TODO: use logger object to log cat vote
+            # use logger object to log cat vote
+            logger.info("Cats Vote", extra=properties)
 
             vote2 = r.get(button2).decode('utf-8')
             properties = {'custom_dimensions': {'Dogs Vote': vote2}}
-            # TODO: use logger object to log dog vote
+            # use logger object to log dog vote
+            logger.info("Dogs Vote", extra=properties)
 
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
@@ -98,7 +156,7 @@ def index():
             return render_template("index.html", value1=int(vote1), value2=int(vote2), button1=button1, button2=button2, title=title)
 
 if __name__ == "__main__":
-    # TODO: Use the statement below when running locally
+    # Use the statement below when running locally
     app.run() 
-    # TODO: Use the statement below before deployment to VMSS
+    # Use the statement below before deployment to VMSS
     # app.run(host='0.0.0.0', threaded=True, debug=True) # remote
